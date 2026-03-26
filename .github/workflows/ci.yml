@@ -1,0 +1,44 @@
+name: CI - Build SampleWebAPI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  PROJECT_PATH: ./SampleWebAPI.csproj
+  DOTNET_VERSION: 10.0.x
+  PUBLISH_DIR: ./publish
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.PROJECT_PATH }}
+
+      - name: Build project
+        run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
+
+      - name: Publish project
+        run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.PUBLISH_DIR }}
+
+      - name: Upload publish artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: samplewebapi-publish
+          path: ${{ env.PUBLISH_DIR }}
