@@ -1,0 +1,71 @@
+name: CD - Deploy SampleWebAPI to DEV
+
+on:
+  workflow_run:
+    workflows: ["CI - Build SampleWebAPI"]
+    types:
+      - completed
+
+env:
+  APP_NAME: SampleWebAPI
+  ARTIFACT_NAME: samplewebapi-publish
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: [self-hosted, dev, windows]
+    environment: dev
+
+    steps:
+      - name: Download artifact from CI run
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ci.yml
+          run_id: ${{ github.event.workflow_run.id }}
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ./publish
+
+      - name: Deploy to IIS
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $publishPath = "$PWD\publish"
+          $targetPath = "C:\apps\SampleWebAPI"
+          $backupRoot = "C:\apps\backups\SampleWebAPI"
+          $appPoolName = "${{ secrets.DEV_APP_POOL }}"
+          $siteName = "${{ secrets.DEV_SITE_NAME }}"
+
+          Write-Host "Creating backup folder..."
+          $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+          $backupPath = Join-Path $backupRoot $timestamp
+          New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
+
+          if (Test-Path $targetPath) {
+              Write-Host "Backing up current deployment..."
+              Copy-Item "$targetPath\*" $backupPath -Recurse -Force
+          }
+
+          Import-Module WebAdministration
+
+          Write-Host "Stopping IIS site and app pool..."
+          if (Test-Path "IIS:\Sites\$siteName") {
+              Stop-Website -Name $siteName
+          }
+          if (Test-Path "IIS:\AppPools\$appPoolName") {
+              Stop-WebAppPool -Name $appPoolName
+          }
+
+          Write-Host "Copying new files..."
+          New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+          Copy-Item "$publishPath\*" $targetPath -Recurse -Force
+
+          Write-Host "Starting IIS app pool and site..."
+          if (Test-Path "IIS:\AppPools\$appPoolName") {
+              Start-WebAppPool -Name $appPoolName
+          }
+          if (Test-Path "IIS:\Sites\$siteName") {
+              Start-Website -Name $siteName
+          }
+
+          Write-Host "Deployment completed."
