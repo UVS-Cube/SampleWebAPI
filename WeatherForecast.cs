@@ -10,6 +10,6 @@ namespace SampleWebAPI
 
         public string? Summary { get; set; }
 
-        
+        public string? Summary2 { get; set; }
     }
 }
